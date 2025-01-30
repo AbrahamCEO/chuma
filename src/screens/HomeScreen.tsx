@@ -241,7 +241,7 @@ const styles = StyleSheet.create({
   },
   statusBarBackground: {
     backgroundColor: '#FF4785',
-    height: 44,
+    height: 30,
     position: 'absolute',
     top: 0,
     left: 0,
@@ -253,7 +253,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     backgroundColor: 'rgba(0,0,0,0.8)',
     position: 'absolute',
-    top: 44,
+    top: 30,
     zIndex: 1,
     width: '100%',
     borderBottomWidth: 1,
