@@ -1,4 +1,4 @@
-import { StatusBar } from 'expo-status-bar';
+import StatusBarComponent from '../components/StatusBarComponent';
 import { StyleSheet, Text, View, FlatList, Image, TouchableOpacity, Dimensions, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useState, useRef, useCallback } from 'react';
@@ -183,10 +183,7 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar style="light" backgroundColor="#FF4785" />
-      
-      {/* Status bar background */}
-      <View style={styles.statusBarBackground} />
+      <StatusBarComponent/>
       
       {/* Categories at top */}
       <View style={styles.categoriesContainer}>
@@ -238,15 +235,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
-  },
-  statusBarBackground: {
-    backgroundColor: '#FF4785',
-    height: 30,
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 1,
   },
   categoriesContainer: {
     paddingVertical: 12,
