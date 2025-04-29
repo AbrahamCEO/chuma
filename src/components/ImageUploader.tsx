@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, TouchableOpacity, Text, ActivityIndicator, Alert, Image } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, TouchableOpacity, Text, ActivityIndicator, Alert, Image, ScrollView } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -7,10 +7,12 @@ const IMGBB_API_KEY = '1edf02cd302f5cdc63cf31360a49c524';
 
 interface ImageUploaderProps {
   onImageUploaded: (url: string) => void;
+  images: string[];
+  onRemoveImage: (index: number) => void;
   style?: any;
 }
 
-const ImageUploader: React.FC<ImageUploaderProps> = ({ onImageUploaded, style }) => {
+const ImageUploader: React.FC<ImageUploaderProps> = ({ onImageUploaded, images, onRemoveImage, style }) => {
   const [isUploading, setIsUploading] = useState(false);
   const [previewUri, setPreviewUri] = useState<string | null>(null);
 
@@ -53,6 +55,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({ onImageUploaded, style })
       if (data.success) {
         const imageUrl = data.data.url;
         onImageUploaded(imageUrl);
+        setPreviewUri(null);
       } else {
         throw new Error(data.error?.message || 'Upload failed');
       }
@@ -70,15 +73,41 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({ onImageUploaded, style })
       alignItems: 'center',
       marginVertical: 10,
     }, style]}>
-      {previewUri ? (
-        <View style={{ marginBottom: 10 }}>
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        style={{ width: '100%', marginBottom: 15 }}
+        contentContainerStyle={{ gap: 10 }}
+      >
+        {images.map((image, index) => (
+          <View key={index} style={{ position: 'relative' }}>
+            <Image 
+              source={{ uri: image }} 
+              style={{ width: 100, height: 100, borderRadius: 8 }}
+            />
+            <TouchableOpacity
+              style={{
+                position: 'absolute',
+                top: -5,
+                right: -5,
+                backgroundColor: 'rgba(0,0,0,0.5)',
+                borderRadius: 12,
+                padding: 4,
+              }}
+              onPress={() => onRemoveImage(index)}
+            >
+              <Ionicons name="close-circle" size={20} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        ))}
+        {previewUri && (
           <Image 
             source={{ uri: previewUri }} 
-            style={{ width: 100, height: 100, borderRadius: 8 }}
+            style={{ width: 100, height: 100, borderRadius: 8, opacity: 0.7 }}
           />
-        </View>
-      ) : null}
-      
+        )}
+      </ScrollView>
+
       <TouchableOpacity 
         style={{
           backgroundColor: '#FF4785',
@@ -88,6 +117,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({ onImageUploaded, style })
           alignItems: 'center',
           justifyContent: 'center',
           opacity: isUploading ? 0.7 : 1,
+          width: '100%',
         }} 
         onPress={pickImage}
         disabled={isUploading}
@@ -103,7 +133,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({ onImageUploaded, style })
           fontSize: 16,
           fontWeight: '600',
         }}>
-          {isUploading ? 'Uploading...' : 'Upload Image'}
+          {isUploading ? 'Uploading...' : 'Add Image'}
         </Text>
         {isUploading && (
           <ActivityIndicator 

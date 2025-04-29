@@ -1,21 +1,22 @@
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { createStackNavigator } from '@react-navigation/stack';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { View } from 'react-native';
+import { View, TouchableOpacity } from 'react-native';
 import HomeScreen from './src/screens/HomeScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import AuthScreen from './src/screens/AuthScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import CreateListingScreen from './src/screens/CreateListingScreen';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 
 const Tab = createBottomTabNavigator();
-const Stack = createStackNavigator();
+const Stack = createNativeStackNavigator();
 
 // Placeholder screens
 const SearchScreen = () => <View style={{ flex: 1, backgroundColor: '#000' }} />;
-const AddProductScreen = () => <View style={{ flex: 1, backgroundColor: '#000' }} />;
 const MessagesScreen = () => <View style={{ flex: 1, backgroundColor: '#000' }} />;
+const AddProductScreen = () => <View style={{ flex: 1, backgroundColor: '#000' }} />;
 
 // Profile Stack
 function ProfileStack() {
@@ -32,7 +33,7 @@ function ProfileStack() {
   );
 }
 
-function Navigation() {
+function TabNavigator({ navigation }) {
   const { user } = useAuth();
 
   if (!user) {
@@ -52,20 +53,22 @@ function Navigation() {
           } else if (route.name === 'Add') {
             iconName = 'add-circle';
             return (
-              <View style={{
-                position: 'absolute',
-                top: -20,
-                width: 60,
-                height: 60,
-                backgroundColor: '#FF4785',
-                borderRadius: 30,
-                justifyContent: 'center',
-                alignItems: 'center',
-                borderWidth: 5,
-                borderColor: '#000',
-              }}>
+              <TouchableOpacity
+                onPress={() => navigation.navigate('CreateListing')}
+                style={{
+                  position: 'absolute',
+                  top: -20,
+                  width: 60,
+                  height: 60,
+                  backgroundColor: '#FF4785',
+                  borderRadius: 30,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  borderWidth: 5,
+                  borderColor: '#000',
+                }}>
                 <Ionicons name={iconName} size={30} color="#fff" />
-              </View>
+              </TouchableOpacity>
             );
           } else if (route.name === 'Messages') {
             iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
@@ -91,7 +94,7 @@ function Navigation() {
       <Tab.Screen name="Search" component={SearchScreen} />
       <Tab.Screen 
         name="Add" 
-        component={AddProductScreen}
+        component={View}
         options={{
           tabBarLabel: () => null,
           tabBarIconStyle: {
@@ -109,7 +112,20 @@ export default function App() {
   return (
     <AuthProvider>
       <NavigationContainer>
-        <Navigation />
+        <Stack.Navigator>
+          <Stack.Screen 
+            name="MainTabs" 
+            component={TabNavigator}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen 
+            name="CreateListing" 
+            component={CreateListingScreen}
+            options={{
+              headerShown: false
+            }}
+          />
+        </Stack.Navigator>
       </NavigationContainer>
     </AuthProvider>
   );

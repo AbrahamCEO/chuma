@@ -1,0 +1,1 @@
+INSERT INTO "public"."profiles" ("id", "display_name", "profile_pic", "bio", "location", "followers_count", "following_count", "created_at", "updated_at") VALUES ('aa73ba21-c4a5-4ec9-8832-c325d3812ac6', 'Teef', null, null, null, '0', '0', '2025-01-30 13:56:00.992863+00', '2025-01-30 13:56:00.992863+00');

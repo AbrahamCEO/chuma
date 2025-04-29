@@ -1,74 +1,122 @@
-import StatusBarComponent from '../components/StatusBarComponent';
-import { StyleSheet, Text, View, FlatList, Image, TouchableOpacity, Dimensions, Animated } from 'react-native';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
+import {
+  StyleSheet,
+  Text,
+  View,
+  FlatList,
+  Image,
+  TouchableOpacity,
+  Dimensions,
+  Animated,
+  ActivityIndicator,
+  RefreshControl,
+  ScrollView,
+} from 'react-native';
+import { Video, ResizeMode } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
-import { useState, useRef, useCallback } from 'react';
+import { supabase } from '../lib/supabase';
+import StatusBarComponent from '../components/StatusBarComponent';
+import { useNavigation } from '@react-navigation/native';
 
-// Mock data for products with multiple images per product
-const PRODUCTS = [
-  {
-    id: '1',
-    title: 'Vintage Leather Jacket',
-    price: '$120',
-    seller: 'John Doe',
-    description: 'Genuine leather jacket in excellent condition',
-    images: [
-      'https://images.unsplash.com/photo-1551028719-00167b16eac5?auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1521223890158-f9f7c3d5d504?auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1559551409-dadc959f76b8?auto=format&fit=crop&q=80'
-    ],
-    likes: 234,
-    comments: 45,
-    location: 'New York, NY',
-  },
-  {
-    id: '2',
-    title: 'Nike Air Max 2024',
-    price: '$180',
-    seller: 'Jane Smith',
-    description: 'Brand new, never worn. Original box included',
-    images: [
-      'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1549298916-b41d501d3772?auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1525966222134-fcfa99b8ae77?auto=format&fit=crop&q=80'
-    ],
-    likes: 456,
-    comments: 67,
-    location: 'Los Angeles, CA',
-  },
-  {
-    id: '3',
-    title: 'iPhone 15 Pro Max',
-    price: '$999',
-    seller: 'Tech Store',
-    description: 'Sealed in box, 256GB, Titanium',
-    images: [
-      'https://images.unsplash.com/photo-1696446701796-da61225697cc?auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1697493621337-89c8c6809f01?auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1697553503153-7f7b15c8f5ea?auto=format&fit=crop&q=80'
-    ],
-    likes: 789,
-    comments: 90,
-    location: 'San Francisco, CA',
-  },
-];
+const { width, height } = Dimensions.get('window');
 
-const CATEGORIES = ['All', 'Fashion', 'Electronics', 'Home', 'Sports', 'Beauty', 'Cars', 'Books'];
+const CATEGORIES = ['All', 'Fashion', 'Electronics', 'Home', 'Sports', 'Books', 'Other'];
+
+// Media renderer component
+const MediaRenderer = ({ mediaUrl, type, isVisible }) => {
+  const videoRef = useRef(null);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const navigation = useNavigation();
+
+  // Handle screen focus/blur
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('blur', () => {
+      if (videoRef.current) {
+        videoRef.current.pauseAsync();
+        setIsPlaying(false);
+      }
+    });
+
+    return unsubscribe;
+  }, [navigation]);
+
+  // Handle visibility changes
+  useEffect(() => {
+    if (videoRef.current) {
+      if (isVisible && isPlaying) {
+        videoRef.current.playAsync();
+      } else {
+        videoRef.current.pauseAsync();
+      }
+    }
+  }, [isVisible, isPlaying]);
+
+  const togglePlayPause = async () => {
+    if (videoRef.current) {
+      if (isPlaying) {
+        await videoRef.current.pauseAsync();
+      } else {
+        await videoRef.current.playAsync();
+      }
+      setIsPlaying(!isPlaying);
+    }
+  };
+
+  if (type === 'video') {
+    return (
+      <TouchableOpacity 
+        style={styles.videoContainer} 
+        onPress={togglePlayPause}
+        activeOpacity={1}
+      >
+        <Video
+          ref={videoRef}
+          source={{ uri: mediaUrl }}
+          style={styles.reelImage}
+          resizeMode={ResizeMode.COVER}
+          isLooping
+          shouldPlay={isVisible && isPlaying}
+          isMuted={false}
+        />
+        {!isPlaying && (
+          <View style={styles.playPauseOverlay}>
+            <Ionicons name="play" size={50} color="rgba(255,255,255,0.8)" />
+          </View>
+        )}
+      </TouchableOpacity>
+    );
+  }
+
+  return (
+    <Image
+      source={{ uri: mediaUrl }}
+      style={styles.reelImage}
+      resizeMode="cover"
+    />
+  );
+};
 
 // Separate Product Carousel Component
-const ProductCarousel = ({ item }) => {
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+const ProductCarousel = ({ item, isVisible }) => {
+  const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
   const [showFullDescription, setShowFullDescription] = useState(false);
   const scrollX = useRef(new Animated.Value(0)).current;
 
   const description = item.description;
-  const isLongDescription = description.length > 100;
-  const displayDescription = showFullDescription ? description : description.slice(0, 100);
+  const isLongDescription = description?.length > 100;
+  const displayDescription = showFullDescription ? description : description?.slice(0, 100);
+
+  // Combine images and videos into a single media array
+  const mediaItems = [
+    ...(item.images || []).map(url => ({ url, type: 'image' })),
+    ...(item.videos || []).map(url => ({ url, type: 'video' }))
+  ];
 
   return (
     <View style={styles.reelContainer}>
-      {/* Image Carousel */}
+      {/* Media Carousel */}
       <FlatList
-        data={item.images}
+        data={mediaItems}
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
@@ -78,14 +126,16 @@ const ProductCarousel = ({ item }) => {
         )}
         onMomentumScrollEnd={(event) => {
           const newIndex = Math.round(event.nativeEvent.contentOffset.x / width);
-          setCurrentImageIndex(newIndex);
+          setCurrentMediaIndex(newIndex);
         }}
-        renderItem={({ item: imageUrl }) => (
-          <Image
-            source={{ uri: imageUrl }}
-            style={styles.reelImage}
-            resizeMode="cover"
-          />
+        renderItem={({ item: media, index }) => (
+          <View style={styles.imageContainer}>
+            <MediaRenderer 
+              mediaUrl={media.url} 
+              type={media.type} 
+              isVisible={isVisible && currentMediaIndex === index}
+            />
+          </View>
         )}
         keyExtractor={(_, index) => index.toString()}
       />
@@ -94,7 +144,7 @@ const ProductCarousel = ({ item }) => {
       <View style={styles.productInfo}>
         <View style={styles.productHeader}>
           <Text style={styles.productTitle}>{item.title}</Text>
-          <Text style={styles.productPrice}>{item.price}</Text>
+          <Text style={styles.productPrice}>${item.price}</Text>
         </View>
 
         <View style={styles.descriptionContainer}>
@@ -116,8 +166,8 @@ const ProductCarousel = ({ item }) => {
               <Ionicons name="person" size={20} color="#666" />
             </View>
             <View>
-              <Text style={styles.sellerName}>@{item.seller}</Text>
-              <Text style={styles.location}>{item.location}</Text>
+              <Text style={styles.sellerName}>@{item.profiles?.display_name}</Text>
+              <Text style={styles.location}>{item.category}</Text>
             </View>
           </View>
           
@@ -134,14 +184,14 @@ const ProductCarousel = ({ item }) => {
           <View style={styles.actionButtonCircle}>
             <Ionicons name="heart-outline" size={28} color="white" />
           </View>
-          <Text style={styles.actionText}>{item.likes}</Text>
+          <Text style={styles.actionText}>0</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.actionButton}>
           <View style={styles.actionButtonCircle}>
             <Ionicons name="chatbubble-outline" size={26} color="white" />
           </View>
-          <Text style={styles.actionText}>{item.comments}</Text>
+          <Text style={styles.actionText}>0</Text>
         </TouchableOpacity>
         
         <TouchableOpacity style={styles.actionButton}>
@@ -152,14 +202,14 @@ const ProductCarousel = ({ item }) => {
         </TouchableOpacity>
       </View>
 
-      {/* Dot indicators at bottom */}
+      {/* Dot indicators */}
       <View style={styles.dotContainer}>
-        {item.images.map((_, index) => (
+        {mediaItems.map((_, index) => (
           <View
             key={index}
             style={[
               styles.dot,
-              { opacity: currentImageIndex === index ? 1 : 0.5 }
+              { opacity: currentMediaIndex === index ? 1 : 0.5 }
             ]}
           />
         ))}
@@ -170,9 +220,20 @@ const ProductCarousel = ({ item }) => {
 
 export default function HomeScreen() {
   const [activeCategory, setActiveCategory] = useState('All');
-  
+  const [listings, setListings] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [visibleIndex, setVisibleIndex] = useState(0);
+  const navigation = useNavigation();
+
   const viewabilityConfig = useRef({
     itemVisiblePercentThreshold: 50
+  }).current;
+
+  const onViewableItemsChanged = useRef(({ viewableItems }) => {
+    if (viewableItems.length > 0) {
+      setVisibleIndex(viewableItems[0].index);
+    }
   }).current;
 
   const getItemLayout = useCallback((data, index) => ({
@@ -181,9 +242,75 @@ export default function HomeScreen() {
     index,
   }), []);
 
+  const fetchListings = async (category = activeCategory) => {
+    try {
+      let query = supabase
+        .from('listings')
+        .select('*, videos')
+        .eq('status', 'active')
+        .order('created_at', { ascending: false });
+
+      if (category !== 'All') {
+        query = query.eq('category', category);
+      }
+
+      const { data: listings, error: listingsError } = await query;
+
+      if (listingsError) throw listingsError;
+
+      // Get unique user IDs from listings
+      const userIds = [...new Set(listings?.map(listing => listing.user_id) || [])];
+
+      // Fetch profiles for these users
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, display_name')
+        .in('id', userIds);
+
+      // Create a map of user_id to display_name
+      const profileMap = new Map(
+        profiles?.map(profile => [profile.id, profile.display_name]) || []
+      );
+
+      // Combine the data
+      const formattedData = listings?.map(listing => ({
+        ...listing,
+        videos: listing.videos || [],
+        profiles: {
+          display_name: profileMap.get(listing.user_id) || 'Anonymous User'
+        }
+      }));
+
+      setListings(formattedData || []);
+    } catch (error) {
+      console.error('Error fetching listings:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchListings(activeCategory);
+  }, [activeCategory]);
+
+  useEffect(() => {
+    fetchListings();
+  }, [activeCategory]);
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <StatusBarComponent />
+        <ActivityIndicator size="large" color="#FF4785" />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      <StatusBarComponent/>
+      <StatusBarComponent />
       
       {/* Categories at top */}
       <View style={styles.categoriesContainer}>
@@ -211,11 +338,12 @@ export default function HomeScreen() {
         />
       </View>
 
-      {/* Products Reel */}
       <FlatList
-        data={PRODUCTS}
-        renderItem={({ item }) => <ProductCarousel item={item} />}
-        keyExtractor={item => item.id}
+        data={listings}
+        renderItem={({ item, index }) => (
+          <ProductCarousel item={item} isVisible={index === visibleIndex} />
+        )}
+        keyExtractor={item => item.id.toString()}
         pagingEnabled
         snapToInterval={height}
         decelerationRate="fast"
@@ -224,17 +352,28 @@ export default function HomeScreen() {
         getItemLayout={getItemLayout}
         snapToAlignment="start"
         viewabilityConfig={viewabilityConfig}
+        onViewableItemsChanged={onViewableItemsChanged}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#FF4785']}
+            tintColor="#FF4785"
+          />
+        }
       />
     </View>
   );
 }
 
-const { width, height } = Dimensions.get('window');
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
+  },
+  centerContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   categoriesContainer: {
     paddingVertical: 12,
@@ -266,6 +405,11 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   reelContainer: {
+    width,
+    height,
+    backgroundColor: '#000',
+  },
+  imageContainer: {
     width,
     height,
     backgroundColor: '#000',
@@ -408,5 +552,19 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     fontWeight: '500',
+  },
+  videoContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  playPauseOverlay: {
+    position: 'absolute',
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

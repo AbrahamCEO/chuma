@@ -42,6 +42,10 @@ export default function CreateListingScreen() {
     setImages(prev => [...prev, url]);
   };
 
+  const handleRemoveImage = (index: number) => {
+    setImages(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleVideoUploaded = (url: string) => {
     setVideo(url);
   };
@@ -52,23 +56,30 @@ export default function CreateListingScreen() {
       return;
     }
 
+    if (!categories.includes(category)) {
+      Alert.alert('Error', 'Please select a valid category');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
+      // Create the listing with initial status as 'active'
+      const listingData = {
+        user_id: user?.id,
+        title,
+        description,
+        price: parseFloat(price),
+        category,
+        images,
+        video_url: video,
+        status: 'active' as const, // Type assertion to ensure valid status
+        created_at: new Date().toISOString()
+      };
+
       const { data, error } = await supabase
         .from('listings')
-        .insert([
-          {
-            user_id: user?.id,
-            title,
-            description,
-            price: parseFloat(price),
-            category,
-            images,
-            video,
-            status: 'active'
-          }
-        ])
+        .insert([listingData])
         .select()
         .single();
 
@@ -76,9 +87,14 @@ export default function CreateListingScreen() {
 
       Alert.alert('Success', 'Your listing has been created!');
       navigation.goBack();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating listing:', error);
-      Alert.alert('Error', 'Failed to create listing. Please try again.');
+      Alert.alert(
+        'Error',
+        error.message.includes('Could not find')
+          ? 'Database schema needs to be updated. Please contact support.'
+          : 'Failed to create listing. Please try again.'
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -162,7 +178,12 @@ export default function CreateListingScreen() {
 
         {/* Image Uploader */}
         <Text style={styles.label}>Images (Required)</Text>
-        <ImageUploader onImageUploaded={handleImageUploaded} />
+        <ImageUploader 
+          onImageUploaded={handleImageUploaded}
+          images={images}
+          onRemoveImage={handleRemoveImage}
+          style={styles.uploader}
+        />
         
         {images.length > 0 && (
           <Text style={styles.uploadStatus}>
@@ -172,7 +193,7 @@ export default function CreateListingScreen() {
 
         {/* Video Uploader */}
         <Text style={styles.label}>Video (Optional)</Text>
-        <VideoUploader onVideoUploaded={handleVideoUploaded} />
+        <VideoUploader onVideoSelect={handleVideoUploaded} />
         
         {video && (
           <Text style={styles.uploadStatus}>Video uploaded successfully</Text>
@@ -287,5 +308,8 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  uploader: {
+    // Add styles for the uploader component here
   },
 });

@@ -1,20 +1,16 @@
 import React, { useState } from 'react';
-import { View, TouchableOpacity, Text, ActivityIndicator, Alert } from 'react-native';
+import { View, TouchableOpacity, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { Ionicons } from '@expo/vector-icons';
-
-// Replace with your Cloudinary credentials
-const CLOUDINARY_URL = 'https://api.cloudinary.com/v1_1/YOUR_CLOUD_NAME/video/upload';
-const CLOUDINARY_UPLOAD_PRESET = 'YOUR_UPLOAD_PRESET';
+import { Video } from 'expo-av';
+import { cloudinaryConfig } from '../config/cloudinary';
 
 interface VideoUploaderProps {
-  onVideoUploaded: (url: string) => void;
-  style?: any;
+  onVideoSelect: (videoUrl: string) => void;
 }
 
-const VideoUploader: React.FC<VideoUploaderProps> = ({ onVideoUploaded, style }) => {
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
+export default function VideoUploader({ onVideoSelect }: VideoUploaderProps) {
+  const [uploading, setUploading] = useState(false);
+  const [previewUri, setPreviewUri] = useState<string | null>(null);
 
   const pickVideo = async () => {
     try {
@@ -22,107 +18,111 @@ const VideoUploader: React.FC<VideoUploaderProps> = ({ onVideoUploaded, style })
         mediaTypes: ImagePicker.MediaTypeOptions.Videos,
         allowsEditing: true,
         quality: 1,
-        videoMaxDuration: 30, // 30 seconds max
       });
 
       if (!result.canceled && result.assets[0]) {
-        handleUpload(result.assets[0]);
+        const videoUri = result.assets[0].uri;
+        setPreviewUri(videoUri);
+        await uploadVideo(videoUri);
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to pick video');
       console.error('Error picking video:', error);
+      alert('Error selecting video. Please try again.');
     }
   };
 
-  const handleUpload = async (videoAsset: any) => {
-    setIsUploading(true);
-    setUploadProgress(0);
-
+  const uploadVideo = async (uri: string) => {
     try {
+      setUploading(true);
+
+      // Create form data for upload
       const formData = new FormData();
       formData.append('file', {
-        uri: videoAsset.uri,
+        uri,
         type: 'video/mp4',
         name: 'upload.mp4',
-      });
-      formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+      } as any);
+      formData.append('upload_preset', cloudinaryConfig.uploadPreset);
 
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', CLOUDINARY_URL);
-
-      // Track upload progress
-      xhr.upload.onprogress = (event) => {
-        if (event.lengthComputable) {
-          const progress = Math.round((event.loaded / event.total) * 100);
-          setUploadProgress(progress);
+      // Upload to Cloudinary
+      const response = await fetch(
+        `https://api.cloudinary.com/v1_1/${cloudinaryConfig.cloudName}/video/upload`,
+        {
+          method: 'POST',
+          body: formData,
         }
-      };
+      );
 
-      xhr.onload = () => {
-        if (xhr.status === 200) {
-          const response = JSON.parse(xhr.responseText);
-          onVideoUploaded(response.secure_url);
-          setIsUploading(false);
-        } else {
-          throw new Error('Upload failed');
-        }
-      };
+      const data = await response.json();
 
-      xhr.onerror = () => {
+      if (data.secure_url) {
+        onVideoSelect(data.secure_url);
+      } else {
         throw new Error('Upload failed');
-      };
-
-      xhr.send(formData);
+      }
     } catch (error) {
-      console.error('Error uploading to Cloudinary:', error);
-      Alert.alert('Error', 'Failed to upload video');
-      setIsUploading(false);
+      console.error('Error uploading video:', error);
+      alert('Error uploading video. Please try again.');
+    } finally {
+      setUploading(false);
     }
   };
 
   return (
-    <View style={[{
-      alignItems: 'center',
-      marginVertical: 10,
-    }, style]}>
-      <TouchableOpacity 
-        style={{
-          backgroundColor: '#FF4785',
-          padding: 15,
-          borderRadius: 8,
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'center',
-          opacity: isUploading ? 0.7 : 1,
-        }} 
-        onPress={pickVideo}
-        disabled={isUploading}
-      >
-        <Ionicons 
-          name="videocam-outline" 
-          size={24} 
-          color="#fff" 
-          style={{ marginRight: 8 }}
+    <View style={styles.container}>
+      {previewUri && !uploading && (
+        <Video
+          source={{ uri: previewUri }}
+          style={styles.preview}
+          useNativeControls
+          resizeMode="contain"
         />
-        <Text style={{
-          color: '#fff',
-          fontSize: 16,
-          fontWeight: '600',
-        }}>
-          {isUploading 
-            ? `Uploading ${uploadProgress}%` 
-            : 'Upload Video'}
-        </Text>
-        {isUploading && (
-          <ActivityIndicator 
-            size="small" 
-            color="#fff" 
-            style={{ marginLeft: 8 }}
-          />
+      )}
+      
+      <TouchableOpacity
+        style={[styles.button, uploading && styles.buttonDisabled]}
+        onPress={pickVideo}
+        disabled={uploading}
+      >
+        {uploading ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.buttonText}>
+            {previewUri ? 'Change Video' : 'Upload Video'}
+          </Text>
         )}
       </TouchableOpacity>
     </View>
   );
-};
+}
 
-export default VideoUploader;
+const styles = StyleSheet.create({
+  container: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  preview: {
+    width: '100%',
+    height: 200,
+    marginBottom: 20,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 8,
+  },
+  button: {
+    backgroundColor: '#FF4785',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    width: '100%',
+    alignItems: 'center',
+  },
+  buttonDisabled: {
+    opacity: 0.7,
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+});
